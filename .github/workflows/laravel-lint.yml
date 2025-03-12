@@ -1,34 +1,46 @@
-name: Laravel Code Linting on Windows
-
+name: Laravel 11
 on:
   push:
+    paths-ignore:
+      - "**.md"
     branches:
-      - '**' # Jalankan linting pada semua branch saat push
+      - main
   pull_request:
     branches:
-      - main # Jalankan linting sebelum merge ke branch main
-
+      - main
 jobs:
-  lint:
-    name: Linting with PHP CodeSniffer and Laravel Pint
-    runs-on: windows-latest # Menggunakan runner Windows
-
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    container:
+      image: laravelfans/laravel:11-dev
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - name: Set up PHP
-        uses: shivammathur/setup-php@v2
+      -
+        name: Checkout
+        uses: actions/checkout@v4
+      -
+        name: PHPUnit
+        env:
+          XDEBUG_MODE: coverage
+        run: |
+          composer require orchestra/testbench:^v9 --dev
+          ./vendor/bin/phpunit --coverage-clover coverage.xml --coverage-filter src/ tests/
+      -
+        name: Lint
+        run: |
+          ./vendor/bin/phpcs --standard=PSR12 src/ tests/
+          ./vendor/bin/phpmd . text src/stubs/phpmd.xml
+          ./vendor/bin/pint --test --config src/stubs/pint.json
+      -
+        name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
         with:
-          php-version: '8.1' # Sesuaikan dengan versi PHP yang digunakan
-          extensions: mbstring, xml, ctype, json, tokenizer # Ekstensi PHP yang diperlukan
-          tools: composer:v2
-
-      - name: Install Composer dependencies
-        run: composer install --prefer-dist --no-progress --no-suggest
-
-      - name: Run PHP CodeSniffer (phpcs)
-        run: vendor\bin\phpcs --standard=PSR12 app\ # Gunakan backslash (\) untuk path di Windows
-
-      - name: Run Laravel Pint
-        run: vendor\bin\pint --test # Gunakan backslash (\) untuk path di Windows
+          name: laravel-11
+          token: ${{ secrets.CODECOV_TOKEN }}
+      -
+        name: install in real Laravel project
+        run: |
+          rm -rf laravel-demo
+          composer create-project --prefer-dist laravel/laravel laravel-demo "11.*"
+          cd laravel-demo && composer require --dev laravel-fans/lint:dev-${{ github.ref_name }} && php artisan lint:publish
+          php artisan lint:code --help
